@@ -58,6 +58,20 @@ public class SpoutMainListener extends SpoutListener
 
 		return true;
 	}
+	public boolean updateInfluenceDisplay(FPlayer player)
+	{
+		Player p = player.getPlayer();
+		if (p == null)
+			return false;
+
+		SpoutPlayer sPlayer = SpoutManager.getPlayer(p);
+		if (!sPlayer.isSpoutCraftEnabled() || (Conf.spoutTerritoryDisplaySize <= 0 && ! Conf.spoutTerritoryNoticeShow))
+			return false;
+
+		this.doHeader(player, sPlayer);
+
+		return true;
+	}
 
 	public void updateOwnerList(FPlayer player)
 	{
@@ -69,6 +83,7 @@ public class SpoutMainListener extends SpoutListener
 		Faction factionHere = Board.getFactionAt(here);
 
 		doOwnerList(player, sPlayer, here, factionHere);
+		
 
 		return;
 	}
@@ -79,18 +94,17 @@ public class SpoutMainListener extends SpoutListener
 		territoryChangeLabels.remove(playerName);
 		ownerLabels.remove(playerName);
 	}
-
-
-	private void doLabels(FPlayer player, SpoutPlayer sPlayer)
+	
+	private void doHeader(FPlayer player, SpoutPlayer sPlayer)
 	{
+		P.p.mmoListener.updateDisplay(sPlayer);
 		FLocation here = new FLocation(player);
 		Faction factionHere = Board.getFactionAt(here);
 		String tag = factionHere.getTag(player);
-
 		// ----------------------
 		// Main territory display
 		// ----------------------
-		if (Conf.spoutTerritoryDisplayPosition > 0 && Conf.spoutTerritoryDisplaySize > 0)
+		if (Conf.spoutTerritoryDisplayPosition > 0 && Conf.spoutTerritoryDisplaySize > 0 && Conf.spoutTerritoryNoticeTopShow)
 		{
 			GenericLabel label; 
 			if (territoryLabels.containsKey(player.getName()))
@@ -110,7 +124,7 @@ public class SpoutMainListener extends SpoutListener
 				territoryLabels.put(player.getName(), label);
 			}
 
-			String msg = tag;
+			String msg = tag + " - " + Math.round(Board.getInfluence(here));
 
 			if (Conf.spoutTerritoryDisplayShowDescription && !factionHere.getDescription().isEmpty())
 				msg += " - " + factionHere.getDescription();
@@ -119,6 +133,15 @@ public class SpoutMainListener extends SpoutListener
 			alignLabel(label, msg);
 			label.setDirty(true);
 		}
+	}
+
+
+	private void doLabels(FPlayer player, SpoutPlayer sPlayer)
+	{
+		doHeader(player,sPlayer);
+		FLocation here = new FLocation(player);
+		Faction factionHere = Board.getFactionAt(here);
+		String tag = factionHere.getTag(player);
 
 		// -----------------------
 		// Fading territory notice

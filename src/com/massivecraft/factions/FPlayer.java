@@ -561,6 +561,13 @@ public class FPlayer extends PlayerEntity implements EconomyParticipator
 		}
 		this.sendMessage(msg);
 	}
+	public void sendFactionHeaderMessage()
+	{
+		if (SpoutFeatures.updateHeaderDisplay(this))
+		{
+			return;
+		}
+	}
 	
 	// -------------------------------
 	// Actions
@@ -625,6 +632,11 @@ public class FPlayer extends PlayerEntity implements EconomyParticipator
 	{
 		// notifyFailure is false if called by auto-claim; no need to notify on every failure for it
 		// return value is false on failure, true on success
+		if(!Conf.enablePowerSystem)
+		{
+			msg("<b>This land claim method has been disabled");
+			return false;
+		}
 
 		Faction myFaction = getFaction();
 		Location loc = this.getPlayer().getLocation();

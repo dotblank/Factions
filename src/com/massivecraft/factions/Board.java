@@ -19,8 +19,9 @@ import com.massivecraft.factions.zcore.util.DiscUtil;
 
 public class Board
 {
+
 	private static transient File file = new File(P.p.getDataFolder(), "board.json");
-	private static transient HashMap<FLocation, String> flocationIds = new HashMap<FLocation, String>();
+	private static transient HashMap<FLocation, Claim> flocationIds = new HashMap<FLocation, Claim>();
 	
 	//----------------------------------------------//
 	// Get and Set
@@ -32,7 +33,7 @@ public class Board
 			return "0";
 		}
 		
-		return flocationIds.get(flocation);
+		return flocationIds.get(flocation).Ids;
 	}
 	
 	public static Faction getFactionAt(FLocation flocation)
@@ -48,8 +49,10 @@ public class Board
 		{
 			removeAt(flocation);
 		}
-		
-		flocationIds.put(flocation, id);
+		Claim c = flocationIds.get(flocation);
+		c = (c == null) ? new Claim() : c;
+		c.Ids = id;
+		flocationIds.put(flocation, c);
 	}
 	
 	public static void setFactionAt(Faction faction, FLocation flocation)
@@ -81,11 +84,11 @@ public class Board
 			faction.clearAllClaimOwnership();
 		}
 
-		Iterator<Entry<FLocation, String>> iter = flocationIds.entrySet().iterator();
+		Iterator<Entry<FLocation, Claim>> iter = flocationIds.entrySet().iterator();
 		while (iter.hasNext())
 		{
-			Entry<FLocation, String> entry = iter.next();
-			if (entry.getValue().equals(factionId))
+			Entry<FLocation, Claim> entry = iter.next();
+			if (entry.getValue().Ids.equals(factionId))
 			{
 				iter.remove();
 			}
@@ -121,10 +124,10 @@ public class Board
 	
 	public static void clean()
 	{
-		Iterator<Entry<FLocation, String>> iter = flocationIds.entrySet().iterator();
+		Iterator<Entry<FLocation, Claim>> iter = flocationIds.entrySet().iterator();
 		while (iter.hasNext()) {
-			Entry<FLocation, String> entry = iter.next();
-			if ( ! Factions.i.exists(entry.getValue()))
+			Entry<FLocation, Claim> entry = iter.next();
+			if ( ! Factions.i.exists(entry.getValue().Ids))
 			{
 				P.p.log("Board cleaner removed "+entry.getValue()+" from "+entry.getKey());
 				iter.remove();
@@ -139,9 +142,9 @@ public class Board
 	public static int getFactionCoordCount(String factionId)
 	{
 		int ret = 0;
-		for (String thatFactionId : flocationIds.values())
+		for (Claim thatFactionId : flocationIds.values())
 		{
-			if(thatFactionId.equals(factionId))
+			if(thatFactionId.Ids.equals(factionId))
 			{
 				ret += 1;
 			}
@@ -158,10 +161,10 @@ public class Board
 	{
 		String factionId = faction.getId();
 		int ret = 0;
-		Iterator<Entry<FLocation, String>> iter = flocationIds.entrySet().iterator();
+		Iterator<Entry<FLocation, Claim>> iter = flocationIds.entrySet().iterator();
 		while (iter.hasNext()) {
-			Entry<FLocation, String> entry = iter.next();
-			if (entry.getValue().equals(factionId) && entry.getKey().getWorldName().equals(worldName))
+			Entry<FLocation, Claim> entry = iter.next();
+			if (entry.getValue().Ids.equals(factionId) && entry.getKey().getWorldName().equals(worldName))
 			{
 				ret += 1;
 			}
@@ -265,10 +268,10 @@ public class Board
 		String worldName, coords;
 		String id;
 		
-		for (Entry<FLocation, String> entry : flocationIds.entrySet()) {
+		for (Entry<FLocation, Claim> entry : flocationIds.entrySet()) {
 			worldName = entry.getKey().getWorldName();
 			coords = entry.getKey().getCoordString();
-			id = entry.getValue();
+			id = entry.getValue().getClaimString();
 			if ( ! worldCoordIds.containsKey(worldName)) {
 				worldCoordIds.put(worldName, new TreeMap<String,String>());
 			}
@@ -278,15 +281,26 @@ public class Board
 		
 		return worldCoordIds;
 	}
-	
+	public static void setInfluence(FLocation l, double influenceConvertedStart)
+	{
+		Claim c = flocationIds.get(l);
+		c = (c == null) ? new Claim() : c;
+		c.Power = influenceConvertedStart;
+		flocationIds.put(l, c);
+	}
+	public static double getInfluence(FLocation l)
+	{
+		Claim c = flocationIds.get(l);
+		c = (c == null) ? new Claim() : c;
+		return c.Power;
+	}
 	public static void loadFromSaveFormat(Map<String,Map<String,String>> worldCoordIds)
 	{
 		flocationIds.clear();
 		
 		String worldName;
-		String[] coords;
+		String[] coords, claimDetail;
 		int x, z;
-		String factionId;
 		
 		for (Entry<String,Map<String,String>> entry : worldCoordIds.entrySet())
 		{
@@ -296,8 +310,11 @@ public class Board
 				coords = entry2.getKey().trim().split("[,\\s]+");
 				x = Integer.parseInt(coords[0]);
 				z = Integer.parseInt(coords[1]);
-				factionId = entry2.getValue();
-				flocationIds.put(new FLocation(worldName, x, z), factionId);
+				claimDetail = entry2.getValue().trim().split("[,\\s]+");
+				Claim c  = new Claim();
+				c.Ids = claimDetail[0];
+				c.Power = Double.parseDouble(claimDetail[1]);
+				flocationIds.put(new FLocation(worldName, x, z), c);
 			}
 		}
 	}
@@ -318,6 +335,160 @@ public class Board
 		}
 		
 		return true;
+	}
+	public static boolean calculateclaim(Claim parent, Claim child, int time)
+	{
+		double orate = child.Power/Conf.influenceConversionRate;
+		double crate = parent.Power/Conf.influenceConversionRate;
+		double sign;
+		boolean changed = false;
+		//System.out.println("Conversion test " + child.Power);
+		if(orate<crate && Math.abs(parent.Power-child.Power) > Conf.influenceDelta)
+		{
+			//Do not convert safe or war zones
+			if(parent.Ids.startsWith("-") || child.Ids.startsWith("-"))
+				return false;
+			// Let decay convert instead
+			if(parent.Ids.equals("0"))
+				return false;
+			//Contribute power as opposed to removing
+			if(parent.Ids.equalsIgnoreCase(child.Ids))
+				sign = 1;
+			else
+				sign = -1;
+			
+			child.Power = child.Power + sign*((crate-orate)*(double)time);
+			
+			//The Land Claim was overturned
+			if(child.Power <= 0)
+			{
+				child.Ids = parent.Ids;
+				child.Power = Conf.influenceConvertedStart;
+			}
+			changed = true;
+		}
+		return changed;
+	}
+	public static void UpdateClaims(int time)
+	{
+		if(!Conf.enableInfluenceSystem)
+			return;
+		
+		double crate = 0.0;
+		FLocation flc = new FLocation();
+		Claim claim;
+		HashMap<FLocation, Claim> changedIDs = new HashMap<FLocation, Claim>();
+		changedIDs.putAll(flocationIds);
+		for(Entry<FLocation, Claim> entry : flocationIds.entrySet())
+		{
+			crate = entry.getValue().Power/Conf.influenceConversionRate;
+			if(crate <= 0)
+				continue;
+
+			flc.setWorldName(entry.getKey().getWorldName());
+			
+			// Go +Z
+			flc.setZ((int)entry.getKey().getZ()+1);
+			flc.setX((int)entry.getKey().getX());
+			claim = changedIDs.get(flc);
+			if(claim == null)
+			{
+				claim = new Claim();
+			}
+			if(calculateclaim(entry.getValue(),claim,time))
+			{
+				FLocation tf = new FLocation();
+				tf.setX((int) flc.getX());
+				tf.setZ((int) flc.getZ());
+				tf.setWorldName(flc.getWorldName());
+				changedIDs.put(tf, claim);
+			}
+			
+			
+			//go -Z
+			flc.setZ((int)entry.getKey().getZ()-1);
+			flc.setX((int)entry.getKey().getX());
+			claim = changedIDs.get(flc);
+			if(claim == null)
+			{
+				claim = new Claim();
+			}
+			if(calculateclaim(entry.getValue(),claim,time))
+			{
+				FLocation tf = new FLocation();
+				tf.setX((int) flc.getX());
+				tf.setZ((int) flc.getZ());
+				tf.setWorldName(flc.getWorldName());
+				changedIDs.put(tf, claim);
+			}
+			
+			//go +X
+			flc.setZ((int)entry.getKey().getZ());
+			flc.setX((int)entry.getKey().getX()+1);
+			claim = changedIDs.get(flc);
+			if(claim == null)
+			{
+				claim = new Claim();
+			}
+			if(calculateclaim(entry.getValue(),claim,time))
+			{
+				FLocation tf = new FLocation();
+				tf.setX((int) flc.getX());
+				tf.setZ((int) flc.getZ());
+				tf.setWorldName(flc.getWorldName());
+				changedIDs.put(tf, claim);
+			}
+			
+			//go -X
+			flc.setZ((int)entry.getKey().getZ());
+			flc.setX((int)entry.getKey().getX()-1);
+			claim = changedIDs.get(flc);
+			if(claim == null)
+			{
+				claim = new Claim();
+			}
+			if(calculateclaim(entry.getValue(),claim,time))
+			{
+				FLocation tf = new FLocation();
+				tf.setX((int) flc.getX());
+				tf.setZ((int) flc.getZ());
+				tf.setWorldName(flc.getWorldName());
+				changedIDs.put(tf, claim);
+			}
+			
+			
+			if(getFactionAt(entry.getKey()).isNormal())
+			{
+				entry.getValue().Power -= (Conf.influenceFactionDecay + (Conf.influenceFactionExpDecay* Math.pow(entry.getValue().Power,1.9))*(double)time);
+				if(entry.getValue().Power <= 0)
+				{
+					Claim c = new Claim();
+					changedIDs.put(entry.getKey(), c);
+				}
+			}
+			else if(getFactionAt(entry.getKey()).isNone())
+			{
+				if(entry.getValue().Power < 500)
+				{
+					entry.getValue().Power += Conf.influenceFactionDecay * time;
+					changedIDs.put(entry.getKey(), entry.getValue());
+				}
+				else if (entry.getValue().Power < 500)
+				{
+					entry.getValue().Power = 500;
+					changedIDs.put(entry.getKey(), entry.getValue());
+				}
+			}
+			  
+		}
+		//Snap in additional chunks
+		flocationIds.putAll(changedIDs);
+		
+		//update players chunk data
+		for(FPlayer p : FPlayers.i.get())
+		{
+			p.sendFactionHeaderMessage();
+		}
 	}
 	
 	public static boolean load()

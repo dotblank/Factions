@@ -71,6 +71,13 @@ public class SpoutFeatures
 
 		return mainListener.updateTerritoryDisplay(player);
 	}
+	public static boolean updateHeaderDisplay(FPlayer player)
+	{
+		if (!enabled())
+			return false;
+
+		return mainListener.updateInfluenceDisplay(player);
+	}
 
 	// update owner list for specified player
 	public static void updateOwnerList(FPlayer player)
@@ -198,10 +205,14 @@ public class SpoutFeatures
 				{
 					addTag += viewedFaction.getTag(relation.getColor().toString() + "[") + "]";
 				}
+				if(Conf.spoutFactionTagsOverNames && Conf.spoutFactionTitlesOverNames)
+				{
+					addTag += "\n";
+				}
 				String rolePrefix = viewedRole.getPrefix();
 				if (Conf.spoutFactionTitlesOverNames && (!viewedTitle.isEmpty() || !rolePrefix.isEmpty()))
 				{
-					addTag += (addTag.isEmpty() ? "" : " ") + viewedRole.getPrefix() + viewedTitle;
+					addTag += viewedRole.getPrefix() + viewedTitle;
 				}
 				spoutApp.setPlayerTitle(sPlayer, viewed, addTag + "\n" + viewed.getDisplayName());
 			}

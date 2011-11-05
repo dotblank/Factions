@@ -17,6 +17,7 @@ public class Conf
 	public static ChatColor colorEnemy = ChatColor.RED;
 	
 	// Power
+	public static boolean enablePowerSystem = true;
 	public static double powerPlayerMax = 10.0;
 	public static double powerPlayerMin = -10.0;
 	public static double powerPerMinute = 0.2; // Default health rate... it takes 5 min to heal one power
@@ -25,6 +26,18 @@ public class Conf
 	public static double powerOfflineLossPerDay = 0.0;  // players will lose this much power per day offline
 	public static double powerOfflineLossLimit = 0.0;  // players will no longer lose power from being offline once their power drops to this amount or less
 	public static double powerFactionMax = 0.0;  // if greater than 0, the cap on how much power a faction can have (additional power from players beyond that will act as a "buffer" of sorts)
+	
+	// Influence
+	public static boolean enableInfluenceSystem = false;
+	public static double influenceConvertedStart = 400; // The power level assigned to recently converted chunks
+	public static double influenceConversionRate = 500; // 1/X Conversion Rate used to determine how quickly the board changes
+	public static double influenceDelta = 100; // Threshold value before chunks begin converting
+	public static double influenceGlyphMininmum = 200;
+	public static double influenceGlyphWildernessMininmum = 700;
+	public static double influencePerXP = 10;
+	public static double influenceFactionDecay = 0.0004;
+	public static double influenceFactionExpDecay = 0.00000001;
+	public static double influenceAttrition = 0.5;
 	
 	public static String prefixAdmin = "**";
 	public static String prefixMod = "*";
@@ -184,6 +197,7 @@ public class Conf
 	public static boolean spoutTerritoryDisplayShowDescription = true;  // whether to show the faction description, not just the faction tag
 	public static boolean spoutTerritoryOwnersShow = true;  // show territory owner list as well
 	public static boolean spoutTerritoryNoticeShow = true;  // show additional brief territory notice near center of screen, to be sure player notices transition
+	public static boolean spoutTerritoryNoticeTopShow = true; // show the territory notice at top of screen
 	public static int spoutTerritoryNoticeTop = 40;  // how far down the screen to place the additional notice
 	public static boolean spoutTerritoryNoticeShowDescription = false;  // whether to show the faction description in the notice, not just the faction tag
 	public static float spoutTerritoryNoticeSize = 1.5f;  // text scale (size) for notice
@@ -294,6 +308,7 @@ public class Conf
 	// Persistance
 	// -------------------------------------------- //
 	private static transient Conf i = new Conf();
+	
 	public static void load()
 	{
 		P.p.persist.loadOrSaveDefault(i, Conf.class, "conf");

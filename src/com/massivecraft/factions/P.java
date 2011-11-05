@@ -2,6 +2,7 @@ package com.massivecraft.factions;
 
 import java.lang.reflect.Modifier;
 import java.lang.reflect.Type;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
@@ -18,6 +19,7 @@ import com.massivecraft.factions.cmd.*;
 import com.massivecraft.factions.integration.Econ;
 import com.massivecraft.factions.integration.SpoutFeatures;
 import com.massivecraft.factions.integration.Worldguard;
+import com.massivecraft.factions.integration.mmoInfoListener;
 import com.massivecraft.factions.listeners.FactionsBlockListener;
 import com.massivecraft.factions.listeners.FactionsChatEarlyListener;
 import com.massivecraft.factions.listeners.FactionsEntityListener;
@@ -29,6 +31,7 @@ import com.massivecraft.factions.util.MyLocationTypeAdapter;
 import com.massivecraft.factions.zcore.MPlugin;
 
 import com.nijiko.permissions.PermissionHandler;
+import com.precipicegames.glyphgate.GlyphGate;
 import com.earth2me.essentials.chat.EssentialsChat;
 import com.google.gson.GsonBuilder;
 import com.google.gson.reflect.TypeToken;
@@ -47,14 +50,19 @@ public class P extends MPlugin
 	public final FactionsBlockListener blockListener;
 	public final FactionsServerListener serverListener;
 	
+	
 	// Persistance related
 	private boolean locked = false;
 	public boolean getLocked() {return this.locked;}
 	public void setLocked(boolean val) {this.locked = val; this.setAutoSave(val);}
 	
+	public LandClaimGlyph lg = null;
+	
 	// Commands
 	public FCmdRoot cmdBase;
 	public CmdAutoHelp cmdAutoHelp;
+
+	public mmoInfoListener mmoListener;
 	
 	public P()
 	{
@@ -76,7 +84,7 @@ public class P extends MPlugin
 	public void onEnable()
 	{
 		if ( ! preEnable()) return;
-		
+		System.out.println("Loading.. Factions");
 		// Load Conf from disk
 		Conf.load();
 		FPlayers.i.loadFromDisc();
@@ -99,6 +107,17 @@ public class P extends MPlugin
 		{
 			Worldguard.init(this);			
 		}
+		
+		GlyphGate gateway = (GlyphGate)this.getServer().getPluginManager().getPlugin("GlyphGate");
+		if(lg == null)
+			lg = new LandClaimGlyph();
+		
+		if(gateway != null)
+		{
+			lg.load();
+			gateway.registerGlyph(lg);
+		}
+		this.mmoListener = new mmoInfoListener(this);
 		
 		// Player Events
 		this.registerEvent(Event.Type.PLAYER_CHAT, this.playerListener, Event.Priority.Highest);
@@ -134,10 +153,70 @@ public class P extends MPlugin
 		// Server Events
 		this.registerEvent(Event.Type.PLUGIN_ENABLE, this.serverListener, Event.Priority.Monitor);
 		this.registerEvent(Event.Type.PLUGIN_DISABLE, this.serverListener, Event.Priority.Monitor);
+		this.registerEvent(Event.Type.CUSTOM_EVENT, this.mmoListener, Event.Priority.Normal);
+		
+		//Register land claim calculator
+		this.getServer().getScheduler().scheduleSyncRepeatingTask(this, new Runnable(){
+
+			@Override
+			public void run() {
+				Board.UpdateClaims(15);
+			}
+			
+		}, 2000, 15*20);
+		this.getServer().getScheduler().scheduleSyncRepeatingTask(this, new attrition(), 100, 15*20);
 		
 		postEnable();
 	}
-	
+	public class attrition implements Runnable{
+		private HashMap<Player,Double> damage;
+		attrition()
+		{
+			damage = new HashMap<Player,Double>();
+		}
+
+		public void run() {
+			for(Player player : P.p.getServer().getOnlinePlayers()) {
+				FPlayer fp = FPlayers.i.get(player);
+				if(fp != null && (fp.isInEnemyTerritory() || (fp.isInNeutralTerritory() && fp.isInOthersTerritory() && fp.isInAllyTerritory())))
+				{
+					FLocation centerposition = new FLocation(fp);
+					double safelocation = 6;
+					for(int boxlevel = -4; boxlevel < 5; boxlevel++)
+					{
+						for(int boxlevel2 = -4; boxlevel2 < 5; boxlevel2++)
+						{
+							FLocation scanposition = centerposition.getRelative(boxlevel, boxlevel2);
+							if(!Board.getFactionAt(scanposition).isNormal()
+									|| Board.getFactionAt(scanposition).getId() == fp.getFactionId()
+									|| Board.getFactionAt(scanposition).getRelationWish(fp.getFaction()).isAlly())
+							{
+								double distance = Math.sqrt(
+										Math.pow(boxlevel,2) + Math.pow(boxlevel2, 2)
+										);
+								if(distance < safelocation)
+									safelocation = distance;
+							}
+						}
+					}
+					double d = (damage.containsKey(player)) ? damage.get(player) : 0;
+					d += Conf.influenceAttrition * safelocation;
+					if(safelocation >= 5)
+					{
+						player.setFoodLevel((int) (player.getFoodLevel() * .5));
+						d+=1;
+					}
+					if(d > 1)
+					{
+						player.damage((int)d);
+						d -= (int)d;
+					}
+					damage.put(player, new Double(d));
+				}
+
+			}
+		}
+	}
 	@Override
 	public GsonBuilder getGsonBuilder()
 	{

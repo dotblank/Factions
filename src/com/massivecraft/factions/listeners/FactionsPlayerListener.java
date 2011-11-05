@@ -187,6 +187,7 @@ public class FactionsPlayerListener extends PlayerListener
 		}
 		
 		// Yes we did change coord (:
+		me.sendFactionHeaderMessage();
 		
 		me.setLastStoodAt(to);
 		

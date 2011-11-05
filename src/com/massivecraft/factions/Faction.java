@@ -125,7 +125,6 @@ public class Faction extends Entity implements EconomyParticipator
 			MethodAccount acc = Econ.getMethod().getAccount(aid);
 			acc.set(0); 
 		}
-		
 		return Econ.getMethod().getAccount(aid);
 	}
 	
